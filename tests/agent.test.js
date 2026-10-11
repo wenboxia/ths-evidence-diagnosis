@@ -28,12 +28,11 @@ test('合规规划：估值问题优先估值维度', () => {
   assert.equal(p.dimensions[0].key, 'valuation');
 });
 
-test('合规规划：空问题按公司画像优先级', () => {
+test('合规规划：空问题（全面诊断）覆盖公司画像下的全部维度', () => {
   const p = rulePlan('', diag.profile);
   assert.equal(p.compliance.flag, false);
-  const expected = diag.profile.priority.slice(0, 6);
-  assert.deepEqual(p.dimensions.map((d) => d.key), expected);
-  assert.ok(p.dimensions.length >= 3 && p.dimensions.length <= 6);
+  assert.deepEqual(p.dimensions.map((d) => d.key), diag.profile.priority);
+  assert.ok(p.dimensions.some((d) => d.key === 'risk'));
 });
 
 test('校验器：未引用证据', () => {

@@ -188,3 +188,10 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; background:
   .brand-sub { display: none; }
   .board { grid-template-columns: 1fr; }
 }
+
+.oq-ask { margin-left: 6px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink-2); font-size: 11px; }
+.oq-ask:hover { border-color: var(--brand); color: var(--brand); }
+.risk-more { margin: 4px 4px 0; font-size: 12px; color: var(--ink-2); }
+.risk-more summary { cursor: pointer; }
+a.jump { font-size: 12px; color: #1971c2; }
+.oq:target { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(233, 48, 48, .15); }
