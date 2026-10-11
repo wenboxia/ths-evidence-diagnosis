@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60,
+      "includeFiles": "snapshots/**"
+    }
+  },
+  "regions": [
+    "sin1"
+  ]
+}

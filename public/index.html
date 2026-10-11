@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>证据诊股 · AI Native 个股诊断</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">证</span>
+      <div>
+        <div class="brand-name">证据诊股</div>
+        <div class="brand-sub">每个结论都能回到原始字段</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <select id="stock" aria-label="选择标的">
+        <option value="300033.SZ">同花顺 300033.SZ</option>
+        <option value="600519.SH">贵州茅台 600519.SH</option>
+      </select>
+      <span id="dataMode" class="pill">加载中…</span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="banner" class="banner hidden"></section>
+
+    <section class="hero card">
+      <div class="hero-left">
+        <div class="co-name"><span id="coName">—</span> <span id="coCode" class="muted"></span></div>
+        <div id="coMeta" class="muted small"></div>
+        <div id="profile" class="profile"></div>
+      </div>
+      <div class="hero-right" id="stats"></div>
+    </section>
+
+    <section class="card ask">
+      <form id="askForm" class="ask-row">
+        <input id="question" autocomplete="off" placeholder="你想了解这家公司的什么？例如：业绩在改善吗？估值贵不贵？" maxlength="300" />
+        <button type="submit" id="askBtn">诊断</button>
+      </form>
+      <div class="chips" id="suggest">
+        <button data-q="">全面诊断</button>
+        <button data-q="业绩在改善吗？">业绩在改善吗？</button>
+        <button data-q="估值贵不贵？和同行比怎么样？">估值贵不贵？</button>
+        <button data-q="主要风险有哪些？">主要风险有哪些？</button>
+        <button data-q="现在能买吗？">现在能买吗？</button>
+      </div>
+      <div id="agent" class="agent hidden"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>证据看板</h2>
+        <div class="muted small">所有数字由确定性代码计算；正/负判定规则写在每条证据里，点击查看来源与钻取</div>
+      </div>
+      <div class="chips dim-filter" id="dimFilter"></div>
+      <div class="board" id="board"></div>
+      <details class="neutral-box" id="neutralBox">
+        <summary>中性 / 描述性证据 <span id="neutralCount"></span></summary>
+        <div class="neutral-list" id="neutralList"></div>
+      </details>
+    </section>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>待验证问题</h2>
+        <div class="muted small">当前数据无法回答的事项，以及建议的验证路径</div>
+      </div>
+      <div id="openQs" class="open-qs"></div>
+    </section>
+
+    <section class="card">
+      <details id="callsBox">
+        <summary><h2 class="inline">工具调用记录</h2> <span id="callsSummary" class="muted small"></span></summary>
+        <div id="calls"></div>
+      </details>
+    </section>
+
+    <footer class="foot muted small">
+      本产品仅做信息整理与证据呈现，不构成任何投资建议，不预测涨跌，不提供买卖建议。数据来源：同花顺扶摇金融数据 API（fuyao.aicubes.cn）；同行池为人工选取，口径见各条证据。
+    </footer>
+  </main>
+
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div id="drawerTitle"></div>
+      <button id="drawerClose" aria-label="关闭">✕</button>
+    </div>
+    <div id="drawerBody" class="drawer-body"></div>
+  </aside>
+  <div id="scrim" class="scrim"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
