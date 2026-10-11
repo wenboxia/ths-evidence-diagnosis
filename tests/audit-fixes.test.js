@@ -198,3 +198,37 @@ test('规划器文字：命中禁用词时意图改为固定文本，不再回�
   sanitizePlan(plan, '现在能不能买入，可以继续持有吗', d.profile);
   assert.equal(bannedHit(plan.intent), null);
 });
+
+// ---------- 第三轮：查漏发现的问题 ----------
+test('合规（三）：按短语拦截，不误伤中性陈述', () => {
+  for (const t of ['期末持有货币资金 124.49 亿元', '公司在 AI 业务上的布局持续推进', '股价近 1 月反弹 8.9%', '资产配置以现金为主', '建议查阅年报中的分产品收入', '可以考虑在巨潮资讯网检索近 3 个月公告', '高估值意味着对增长持续性的要求更高', '市场情绪处于观望状态']) {
+    assert.equal(bannedHit(t), null, `不应拦截：${t}`);
+  }
+  for (const t of ['可以继续持有', '建议观望', '股价将反弹', '有望见底回升', '估值偏贵', '存在高估']) assert.ok(bannedHit(t), `应拦截：${t}`);
+});
+
+test('校验器：未知/待验证类陈述（历史分位、分部构成）不触发 false_missing_claim', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const r = verify({
+    unknowns: [{ text: '估值的历史分位未提供，无法评述', evidence_ids: ['V1'] }],
+    answer: [{ text: '分部收入构成未提供，无法评述哪块业务最敏感', type: 'inference', confidence: '低', evidence_ids: ['D1'] }],
+  }, d);
+  assert.ok(!r.issues.some((i) => i.type === 'false_missing_claim'));
+});
+
+test('事实/推断（三）：证据原文中的词不触发改判', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const v2 = d.evidence.find((e) => e.id === 'V2');
+  const out = { answer: [{ text: `${v2.title} ${v2.display}，规则：${v2.rule}`, type: 'fact', evidence_ids: ['V2'] }] };
+  relabel(out, d);
+  assert.equal(out.answer[0].type, 'fact');
+});
+
+test('风险规则：茅台无经营驱动维度，R3/R4 标为不适用；X2 文案写明 I2 仍纳入', async () => {
+  const col = await collect(createFuyaoClient({ mock: mockFuyao }), '600519.SH');
+  const d = buildEvidence(col);
+  for (const id of ['R3', 'R4']) assert.equal(d.risk_checks.find((c) => c.id === id).not_applicable, true);
+  const mock = async (path, p) => { const env = await mockFuyao(path, p); if (path.includes('income-statements') && p.thscode === '300059.SZ') for (const it of env.data.item) it.parent_holder_net_profit = it.operating_income * 3.5; return env; };
+  const d2 = buildEvidence(await collectWith(mock));
+  assert.match(d2.evidence.find((e) => e.id === 'X2').rule, /I2.*仍纳入/);
+});

@@ -106,7 +106,7 @@ function renderBoard() {
   const untriggered = checks.filter((c) => !c.triggered);
   const riskHtml = `<div class="col-head" style="margin-top:10px;color:var(--neg)"><span>风险信号（规则检查 ${checks.length} 项，触发 ${checks.filter((c) => c.triggered).length} 项）</span><span>${risks.length}</span></div>` +
     (risks.length ? risks.map((r) => `<div class="ev"><div class="ev-top"><span>${r.id} · 风险等级 ${esc(r.level)}</span></div><div class="ev-title">${esc(r.title)}</div><div class="ev-val muted small">规则：${esc(r.rule || '')}</div><div class="refs">${r.refs.slice(0, 8).map((x) => `<span class="cite" data-ev="${x}">${x}</span>`).join('')}${r.refs.length > 8 ? `<span class="muted small"> …等 ${r.refs.length} 条</span>` : ''}</div></div>`).join('') : '<div class="muted small" style="padding:4px">当前没有触发的规则风险信号（不代表没有风险）</div>') +
-    (untriggered.length ? `<details class="risk-more"><summary>已检查、未触发的规则（${untriggered.length}）</summary>${untriggered.map((c) => `<div class="small" style="margin:4px 0">${c.id} ${esc(c.title)}<span class="muted">｜${esc(c.rule)}${c.available ? '' : '（相关证据不可用，无法检查）'}</span> ${c.refs.map((x) => `<span class="cite" data-ev="${x}">${x}</span>`).join('')}</div>`).join('')}</details>` : '');
+    (untriggered.length ? `<details class="risk-more"><summary>已检查、未触发的规则（${untriggered.length}）</summary>${untriggered.map((c) => `<div class="small" style="margin:4px 0">${c.id} ${esc(c.title)}<span class="muted">｜${esc(c.rule)}${c.not_applicable ? '（该公司类型不适用）' : c.available ? '' : '（相关证据不可用，无法检查）'}</span> ${c.refs.map((x) => `<span class="cite" data-ev="${x}">${x}</span>`).join('')}</div>`).join('')}</details>` : '');
   $('#board').innerHTML =
     col('pos', '正面证据', pos.map(evCard).join(''), pos.length) +
     col('neg', '负面证据', neg.map(evCard).join('') + riskHtml, neg.length) +
@@ -172,12 +172,12 @@ function renderAgent(d) {
   const html = [];
   html.push(`<div class="steps">${steps}</div>`);
   html.push(`<div class="muted small">证据生成于 ${cnTime(d.evidence_generated_at)}${d.evidence_reused ? '（复用页面已加载的已签名证据，未重复调用数据源）' : '（本次重新采集）'}</div>`);
-  if (d.data_notice) html.push(`<div class="banner">${esc(d.data_notice)}：以下解读引用的部分证据来自快照/缓存，可能不是最新数据；每条证据的抓取时间见抽屉。</div>`);
+  if (d.data_notice) html.push(`<div class="banner">${esc(d.data_notice)} 以下解读据此生成，每条证据的抓取时间见抽屉。</div>`);
   html.push(`<div class="plan"><b>Agent 规划</b>（${plan.source === 'llm' ? 'LLM 规划' : '规则规划兜底'}）：${esc(plan.intent)}
     <div class="dims">${plan.dimensions.map((x, i) => `<span class="tag dim" title="${esc(x.reason)}">${i + 1}. ${DIM_LABEL[x.key] || x.key}<span class="muted">｜${esc(x.reason)}</span></span>`).join('')}</div></div>`);
   if (plan.compliance?.flag) html.push(`<div class="compliance">合规提示：${esc(plan.compliance.note)}</div>`);
   if (plan.clarify) html.push(`<div class="clarify">需要澄清：${esc(plan.clarify)}（已按默认理解继续诊断）</div>`);
-  html.push(`<div class="headline"><span class="badge inference" style="font-size:11px;vertical-align:2px">概述·推断</span> ${esc(it.headline)} ${cites(it.headline_ids)}${(it.headline_flags || []).map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join('')}</div>`);
+  html.push(`<div class="headline"><span class="badge inference" style="font-size:11px;vertical-align:2px">概述·推断</span> ${esc(it.headline_body || it.headline)} ${cites(it.headline_ids)}${(it.headline_flags || []).map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join('')}</div>`);
   if (it.answer?.length) html.push(`<div><div class="subhead">回应你的问题</div><div class="stmts">${it.answer.map((s) => stmt(s)).join('')}</div></div>`);
   if (it.dimensions?.length) html.push(`<div class="grid2">${it.dimensions.map((dm) => `<div class="dim-block"><h4>${DIM_LABEL[dm.key] || dm.key}</h4><div class="stmts">${(dm.points || []).map((s) => stmt(s)).join('')}</div></div>`).join('')}</div>`);
   html.push(`<div class="grid2">
@@ -226,7 +226,7 @@ function openEvidence(id) {
   if (e.events) body.push(tableHtml(['除权日', '每股派现(元,税前)', '每股送转'], e.events.map((x) => [cnDate(x.ex_date_ms), x.dividend_per_share, x.per_share_bonus])));
   body.push(`<div><div class="subhead">原始来源（可回溯到接口字段）</div>${(e.sources || []).length ? tableHtml(['工具', '接口 / 参数', '字段', 'request_id', '抓取时间', '数据时点', '状态'], e.sources.map((s) => [
     esc(s.tool || s.key), `<code>${esc(s.path || '')}</code><br><code>${esc(JSON.stringify(s.params || {}))}</code>`, (s.fields || []).map((f) => `<code>${esc(f)}</code>`).join(' '),
-    `<code>${esc(s.request_id || '--')}</code>`, cnTime(s.fetched_at), s.data_timestamp ? cnDate(s.data_timestamp) : '--',
+    `<code>${esc(s.request_id || '--')}</code>`, cnTime(s.fetched_at), s.data_timestamp ? `${cnDate(s.data_timestamp)}${d.last_trade_date && ['valuations', 'anomaly'].includes(s.key) && cnDate(s.data_timestamp) !== d.last_trade_date ? `（对应交易日 ${d.last_trade_date}）` : ''}` : '--',
     (s.ok ? '成功' : `失败 ${esc(s.code ?? '')}`) + (s.cache === 'snapshot' || s.cache === 'stale' ? `<br><span class="err-dot">实时失败，使用${s.cache === 'snapshot' ? '快照' : '缓存'}</span>` : '')]), true) : `<span class="muted small">${e.unavailable === 'not_integrated' ? '未接入：iFinD MCP 可提供公告/新闻，需要 iFinD 账号授权，本次未取得；扶摇资讯事件库仅限同花顺 AI 客户端。' : '该项没有可追溯的接口调用。'}</span>`}</div>`);
   const relQ = d.open_questions.filter((q) => (q.refs || []).includes(id));
   if (relQ.length) body.push(`<div><div class="subhead">相关待验证问题</div>${relQ.map((q) => `<div class="oq" style="margin-bottom:8px"><div class="q">${esc(q.question)}</div><div class="why">为何无法回答：${esc(q.why)}</div><div class="how">建议验证路径：${esc(q.how)}</div><a href="#oq-${esc(q.id)}" class="jump">在“待验证问题”中查看</a> <button class="oq-ask" data-q="${esc(q.question)}">就此追问 →</button></div>`).join('')}</div>`);

@@ -1,4 +1,6 @@
 .env
+.claude
+.DS_Store
 .env.*
 .vercel
 node_modules
