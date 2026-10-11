@@ -54,9 +54,9 @@ function render() {
   $('#coCode').textContent = d.thscode;
   const k = d.series.kline;
   const last = k[k.length - 1];
-  $('#coMeta').textContent = `${d.preset.board} · ${d.preset.industry_label}${last ? ` · 最新收盘 ${last[1]}（${cnDate(last[0])}，前复权）` : ''} · 最新财报 ${d.report || '--'} · 季报口径：${d.quarterly_basis.label}`;
+  $('#coMeta').textContent = `${d.preset.board} · ${d.preset.industry_label}${last ? ` · 最新收盘 ${last[1]} 元（${cnDate(last[0])}，前复权）` : ''} · 最新财报 ${d.report || '--'} · 季报口径：${d.quarterly_basis.label}`;
   const d1 = d.evidence.find((e) => e.id === 'D1');
-  $('#profile').innerHTML = `<span class="tag type" title="${esc(d.profile.why)}">公司类型：${esc(d.profile.type)}</span>` +
+  $('#profile').innerHTML = `<span class="tag type" title="${esc(d.profile.why)}">公司类型：${esc(d.profile.type_label || d.profile.type)}</span>` +
     d.profile.traits.map((t) => {
       const weak = !!t.weak;
       return `<span class="tag ${weak ? 'unsupported' : ''}" title="${weak ? '行业属性预设，数据支持较弱（D1 相关系数 <0.6），仅作参考' : '依据 ' + t.ref}">${esc(t.label)} <span class="cite" data-ev="${t.ref}">${t.ref}</span></span>`;
@@ -137,6 +137,8 @@ function renderCalls() {
 
 // ---------------- Agent ----------------
 async function askAgent(question) {
+  // 已签名证据超过 25 分钟（服务端 30 分钟失效）时先刷新，避免问答接口重新采集导致超时
+  if (STATE.diag && Date.now() - STATE.diag.generated_at > 25 * 60 * 1000) await load(STATE.code);
   const box = $('#agent');
   box.classList.remove('hidden');
   $('#askBtn').disabled = true;
@@ -157,7 +159,7 @@ const STATUS_LABEL = { fixed: '已替换', ok: '完成', pass: '通过', fail: '
 
 function cites(ids) { return (ids || []).map((id) => `<span class="cite" data-ev="${esc(id)}">${esc(id)}</span>`).join(''); }
 function stmt(s, forceType) {
-  const type = forceType || s.type || 'fact';
+  const type = forceType || (['fact', 'inference'].includes(s.type) ? s.type : 'inference');
   const label = type === 'fact' ? '事实' : type === 'inference' ? `推断${s.confidence ? '·' + s.confidence : ''}` : type === 'tension' ? '矛盾' : '未知';
   return `<div class="stmt"><span class="badge ${type}">${label}</span><div>${esc(s.text)}${cites(s.evidence_ids)}${s.relabeled ? `<span class="muted small">（${esc(s.relabeled)}）</span>` : ''}${(s.flags || []).map((f) => `<span class="flag">⚠ 未通过校验：${esc(f)}</span>`).join('')}</div></div>`;
 }
@@ -269,7 +271,7 @@ function peerTable(field) {
   const f = (k, v) => (v === null || v === undefined || !isFinite(v) ? '--' : ['revenue', 'net_profit'].includes(k) ? yi(v) : ['net_margin', 'revenue_yoy', 'profit_yoy', 'roe'].includes(k) ? `${v.toFixed(1)}%` : v.toFixed(2));
   return `<div><div class="subhead">同行对比（${esc(pt.period)}；${esc(pt.rule)}）</div><div class="table-scroll"><table>
     <thead><tr><th>公司</th>${cols.map(([k, l]) => `<th class="num ${k === field ? 'hl' : ''}">${l}</th>`).join('')}</tr></thead>
-    <tbody>${pt.rows.map((r) => `<tr class="${r.is_target ? 'hl' : ''}"><td>${esc(r.name)}<br><code>${r.thscode}</code>${r.comparable === false ? `<br><span class="ev-status" title="${esc(r.conflict_reason)}">口径不可比·不参与排名</span>` : ''}</td>${cols.map(([k]) => `<td class="num ${k === field ? 'hl' : ''}">${f(k, r[k])}</td>`).join('')}</tr>`).join('')}</tbody>
+    <tbody>${pt.rows.map((r) => `<tr class="${r.is_target ? 'hl' : ''}"><td>${esc(r.name)}<br><code>${r.thscode}</code>${r.comparable === false ? `<br><span class="ev-status" title="${esc(r.conflict_reason)}">营收口径不可比·不参与营收类排名</span>` : ''}</td>${cols.map(([k]) => `<td class="num ${k === field ? 'hl' : ''}">${f(k, r[k])}</td>`).join('')}</tr>`).join('')}</tbody>
   </table></div>${pt.excluded.length ? `<div class="muted small">未纳入：${pt.excluded.map((e) => `${esc(e.name)}（${esc(e.reason)}）`).join('；')}</div>` : ''}<div class="muted small">估值为最新快照；财务为同一报告期${esc(STATE.diag.quarterly_basis.label)}。</div></div>`;
 }
 
@@ -301,7 +303,7 @@ function bindRange(drill) {
     $('#priceChart').innerHTML = `<div class="legend">${lines.map((l) => `<span><i style="background:${l.color}"></i>${esc(l.name)}</span>`).join('')}<span class="muted">（起点归一为 100）</span></div>` + lineChart(lines, { highlight: drill.highlight });
     const ret = (k[k.length - 1][1] / k[0][1] - 1) * 100;
     const hi = Math.max(...k.map((b) => b[1])), lo = Math.min(...k.map((b) => b[1]));
-    $('#rangeStats').textContent = `${cnDate(k[0][0])} ~ ${cnDate(k[k.length - 1][0])}：区间涨跌 ${fmtPct(ret)}，区间最高收盘 ${hi.toFixed(2)}，最低收盘 ${lo.toFixed(2)}，共 ${k.length - 1} 个交易日（前端按所选区间实时计算，前复权）`;
+    $('#rangeStats').textContent = `${cnDate(k[0][0])} ~ ${cnDate(k[k.length - 1][0])}：区间涨跌 ${fmtPct(ret)}，区间最高收盘 ${hi.toFixed(2)} 元，最低收盘 ${lo.toFixed(2)} 元，共 ${k.length - 1} 个交易日（前端按所选区间实时计算，前复权）`;
     btns.forEach((b) => b.classList.toggle('on', Number(b.dataset.n) === n));
   };
   btns.forEach((b) => b.addEventListener('click', () => draw(Number(b.dataset.n))));

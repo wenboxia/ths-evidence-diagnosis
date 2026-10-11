@@ -137,3 +137,64 @@ test('全面诊断规划覆盖风险维度', async () => {
   const d = buildEvidence(await collectWith(mockFuyao));
   assert.ok(rulePlan('', d.profile).dimensions.some((x) => x.key === 'risk'));
 });
+
+// ---------- 第二轮复核发现的问题 ----------
+async function diagWith(patch) {
+  const mock = async (path, p) => { const env = await mockFuyao(path, p); patch(path, p, env); return env; };
+  return buildEvidence(await collectWith(mock));
+}
+
+test('字段为空（二）：F3/F5/Q2 不得用空值算出结论', async () => {
+  const d = await diagWith((path, p, env) => {
+    if (p.thscode !== CODE || !path.includes('income-statements')) return;
+    if (p.period === 'quarterly') { env.data.item[0].parent_holder_net_profit = null; env.data.item[1].parent_holder_net_profit = null; env.data.item[2].parent_holder_net_profit = null; env.data.item[3].parent_holder_net_profit = null; }
+    if (p.period === 'annual') { env.data.item[0].operating_income = null; }
+  });
+  const g = (id) => d.evidence.find((e) => e.id === id);
+  assert.equal(g('F3').status, 'missing');
+  assert.notEqual(g('F5')?.status, 'ok');
+  assert.equal(g('Q2').status, 'missing');
+});
+
+test('字段为空（三）：成交额缺失时 M4 不算活跃度，单边市场缺失时 D1 不计算', async () => {
+  const d = await diagWith((path, p, env) => {
+    if (path.includes('/prices/historical') && p.thscode === CODE) for (const b of env.data.item.slice(-30)) b.turnover = null;
+    if (path.includes('a-share-index/prices/historical') && p.thscode === '399106.SZ') for (const b of env.data.item) b.turnover = null;
+  });
+  const g = (id) => d.evidence.find((e) => e.id === id);
+  assert.match(g('M4').display, /成交额数据缺失/);
+  assert.ok(!/NaN/.test(g('M4').display + g('M4').detail));
+  assert.equal(g('D1').status, 'missing');
+});
+
+test('合规词表（二）：持仓/观望/买点/安全边际/看好/有望修复等变体被拦截，“并非”不再豁免', () => {
+  for (const t of ['股价可能上涨', '这并非卖出时机', '可以考虑加仓', '具备投资价值', '后市看好', '估值合理，具备安全边际', '是不错的买点', '股价有较大上升空间', '可以继续拿着', '不必止损', '建议观望', '不宜追高', '估值洼地', '性价比较高', '有望走出底部', '是一只好股票', '前景广阔']) {
+    assert.ok(bannedHit(t), `应拦截：${t}`);
+  }
+  assert.equal(bannedHit('本产品不提供买入、持有或卖出建议'), null);
+});
+
+test('校验器：把已有数据说成“清单未提供”时判为严重问题', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const r = verify({ answer: [{ text: '现金含量与负债率对应证据未出现在本清单中，无法评述', type: 'inference', confidence: '低', evidence_ids: ['F2'] }] }, d);
+  assert.ok(r.issues.some((i) => i.type === 'false_missing_claim' && !i.minor));
+});
+
+test('事实/推断（二）：引用派生/观点证据或带因果措辞的“事实”被改判', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const out = { answer: [
+    { text: '相关系数 0.50', type: 'fact', evidence_ids: ['D1'] },
+    { text: '利润增长主要来自市场成交回暖', type: 'fact', evidence_ids: ['F2'] },
+    { text: '营收同比 +2.01%', type: 'fact', evidence_ids: ['F1'] },
+    { text: '没有类型的陈述', evidence_ids: ['F1'] },
+  ] };
+  relabel(out, d);
+  assert.deepEqual(out.answer.map((x) => x.type), ['inference', 'inference', 'fact', 'inference']);
+});
+
+test('规划器文字：命中禁用词时意图改为固定文本，不再回显用户原句', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const plan = { intent: '理解为：现在能不能买入，可以继续持有吗', compliance: { flag: true, note: '' }, clarify: null, dimensions: [{ key: 'valuation', reason: '估值' }] };
+  sanitizePlan(plan, '现在能不能买入，可以继续持有吗', d.profile);
+  assert.equal(bannedHit(plan.intent), null);
+});

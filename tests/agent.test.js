@@ -87,7 +87,7 @@ test('校验器：方向读反', () => {
   assert.ok(!types(t).includes('direction_mismatch'));
 });
 
-test('LLM 不可用降级：模板模式只输出事实', async () => {
+test('LLM 不可用降级：模板模式只输出规则化内容（派生/观点类标为推断）', async () => {
   const restore = withoutEnv(LLM_ENV);
   try {
     assert.equal(llmConfigured(), false);
@@ -99,8 +99,11 @@ test('LLM 不可用降级：模板模式只输出事实', async () => {
     assert.ok(dims.length > 0);
     const points = dims.flatMap((d) => d.points);
     assert.ok(points.length > 0);
+    const byId = new Map(diag.evidence.map((e) => [e.id, e]));
     for (const p of points) {
-      assert.equal(p.type, 'fact');
+      const e = byId.get(p.evidence_ids[0]);
+      if (e.kind === 'derived' || e.kind === 'opinion') assert.equal(p.type, 'inference');
+      else assert.equal(p.type, 'fact');
       assert.ok(p.evidence_ids.length > 0);
     }
     assert.equal(r.verification.mode, 'template');
