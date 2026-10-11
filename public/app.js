@@ -36,6 +36,8 @@ function render() {
   const d = STATE.diag;
   const mode = $('#dataMode');
   if (d.meta.data_mode === 'mock') { mode.className = 'pill mock'; mode.textContent = '⚠ 构造数据（非真实）'; }
+  else if (d.stats.calls_stale) { mode.className = 'pill mock'; mode.textContent = `⚠ 实时调用失败 · 使用快照/缓存数据（${d.stats.calls_stale}/${d.stats.calls_total}）`; }
+  else if (d.stats.calls_failed) { mode.className = 'pill mock'; mode.textContent = `⚠ ${d.stats.calls_failed}/${d.stats.calls_total} 个数据调用失败`; }
   else { mode.className = 'pill live'; mode.textContent = `扶摇实时数据 · ${cnTime(d.meta.generated_at)}`; }
   const banner = $('#banner');
   const msgs = [];
@@ -269,7 +271,7 @@ function bindRange(drill) {
   if (!btns.length) return;
   const draw = (n) => {
     const d = STATE.diag;
-    const k = d.series.kline.slice(-n);
+    const k = d.series.kline.slice(-(n + 1)); // n 个交易日的涨跌需要 n+1 根 K 线，与证据 M1 口径一致
     if (!k.length) { $('#priceChart').innerHTML = '<div class="muted">无行情数据</div>'; return; }
     const lines = [{ pts: k.map((b) => [b[0], b[1] / k[0][1] * 100]), color: '#e93030', name: d.name }];
     const colors = ['#1c7ed6', '#868e96'];
@@ -280,7 +282,7 @@ function bindRange(drill) {
     $('#priceChart').innerHTML = `<div class="legend">${lines.map((l) => `<span><i style="background:${l.color}"></i>${esc(l.name)}</span>`).join('')}<span class="muted">（起点归一为 100）</span></div>` + lineChart(lines, { highlight: drill.highlight });
     const ret = (k[k.length - 1][1] / k[0][1] - 1) * 100;
     const hi = Math.max(...k.map((b) => b[1])), lo = Math.min(...k.map((b) => b[1]));
-    $('#rangeStats').textContent = `${cnDate(k[0][0])} ~ ${cnDate(k[k.length - 1][0])}：区间涨跌 ${fmtPct(ret)}，区间最高 ${hi}，最低 ${lo}，共 ${k.length} 个交易日（前端按所选区间实时计算）`;
+    $('#rangeStats').textContent = `${cnDate(k[0][0])} ~ ${cnDate(k[k.length - 1][0])}：区间涨跌 ${fmtPct(ret)}，区间最高收盘 ${hi.toFixed(2)}，最低收盘 ${lo.toFixed(2)}，共 ${k.length - 1} 个交易日（前端按所选区间实时计算，前复权）`;
     btns.forEach((b) => b.classList.toggle('on', Number(b.dataset.n) === n));
   };
   btns.forEach((b) => b.addEventListener('click', () => draw(Number(b.dataset.n))));

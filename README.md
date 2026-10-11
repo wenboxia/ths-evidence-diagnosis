@@ -3,6 +3,7 @@
 > 同花顺 2027 届 AI 产品经理（AIME 金融智能 Agent 方向）笔试 · 第 1 题
 
 - **在线体验**：https://ths-evidence-diagnosis.vercel.app
+- **源码仓库**：https://github.com/wenboxia/ths-evidence-diagnosis
 - **诊断标的**：同花顺 300033.SZ（主标的，含公司类型专属维度）；贵州茅台 600519.SH（对照标的，用于验证“按公司类型选择维度”）
 - **配套文档**：[AI 使用与验证记录](docs/AI使用与验证记录.md) · [测试说明](docs/测试说明.md)
 
