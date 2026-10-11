@@ -35,7 +35,7 @@ test('业务错误 2001 不重试', async () => {
   assert.equal(fetchImpl.calls.length, 1, '2001 不应重试');
 });
 
-// 已知缺陷：失败路径统一返回 attempts: maxAttempts，未反映真实尝试次数（lib/fuyao.js 返回语句）
+// 回归：失败调用记录真实请求次数（曾恒为 maxAttempts，见 AI 使用与验证记录 #15）
 test('业务错误 2001 的 attempts 字段为 1', async () => {
   const fetchImpl = fetchFrom(() => ({ code: 2001, message: 'unauth', request_id: 'r2', data: null }));
   const client = createFuyaoClient({ apiKey: 'test', fetchImpl, maxAttempts: 2 });
@@ -56,7 +56,7 @@ function hangingFetch() {
 }
 
 test('超时：请求挂起被中止返回 TIMEOUT', async () => {
-  // 注：timeoutMs < 1500 会被预算检查直接判为 BUDGET（见报告），这里用 1600ms
+  // 用 1600ms 覆盖“单次超时”路径；<1500ms 的情况见下一条回归测试
   const fetchImpl = hangingFetch();
   const client = createFuyaoClient({ apiKey: 'test', fetchImpl, timeoutMs: 1600, maxAttempts: 1 });
   const t0 = Date.now();
@@ -67,7 +67,7 @@ test('超时：请求挂起被中止返回 TIMEOUT', async () => {
   assert.ok(Date.now() - t0 < 5000);
 });
 
-// 已知缺陷：timeoutMs < 1500 时 budget 检查把单次超时当作总时限，从不发请求
+// 回归：timeoutMs < 1500 时仍会发出请求（曾被误判为 BUDGET，见 AI 使用与验证记录 #15）
 test('超时：timeoutMs=200 应返回 TIMEOUT', async () => {
   const fetchImpl = hangingFetch();
   const client = createFuyaoClient({ apiKey: 'test', fetchImpl, timeoutMs: 200, maxAttempts: 1 });

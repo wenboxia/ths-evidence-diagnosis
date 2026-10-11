@@ -9,6 +9,6 @@
     "test": "DISABLE_SNAPSHOT=1 node --test 'tests/*.test.js'"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

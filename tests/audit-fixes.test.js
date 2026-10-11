@@ -49,7 +49,10 @@ test('同行口径冲突：净利率 >100% 的同行标为不可比，不参与�
   assert.match(i1.display, /\/ 4/, '营收类排名应剔除不可比同行');
   assert.equal(i1.polarity, 'neutral', '排名不完整时不做正负判定');
   const i2 = d.evidence.find((e) => e.id === 'I2');
-  assert.match(i2.display, /\/ 5/, '净利润可比，不应剔除');
+  assert.match(i2.display, /\/ 4/, '口径不可比的同行不参与任何排名');
+  assert.equal(i2.polarity, 'neutral');
+  const v1 = d.evidence.find((e) => e.id === 'V1');
+  assert.match(v1.detail, /已剔除口径不可比/, '估值中位数同样剔除');
   assert.ok(d.risks.some((r) => r.id === 'R92'));
 });
 
@@ -64,7 +67,7 @@ test('字段为空：不得算出 0% 等“正常”值，E2 只统计正的现�
   const d = buildEvidence(await collectWith(mock));
   const get = (id) => d.evidence.find((e) => e.id === id);
   assert.equal(get('Q5').status, 'missing');
-  assert.equal(get('Q4').status, 'missing');
+  assert.match(get('Q4').basis, /index_weighted_avg_roe/, '年报净利为空时改用指标接口的加权 ROE，不用近似值');
   assert.equal(get('F4').status, 'missing');
   assert.equal(get('E2').value, 1, '只有 1 年有正的现金分红');
   assert.notEqual(get('E2').polarity, 'positive');
@@ -224,11 +227,57 @@ test('事实/推断（三）：证据原文中的词不触发改判', async () =
   assert.equal(out.answer[0].type, 'fact');
 });
 
-test('风险规则：茅台无经营驱动维度，R3/R4 标为不适用；X2 文案写明 I2 仍纳入', async () => {
+test('风险规则：茅台无经营驱动维度，R3/R4 标为不适用；X2 文案与剔除范围一致', async () => {
   const col = await collect(createFuyaoClient({ mock: mockFuyao }), '600519.SH');
   const d = buildEvidence(col);
   for (const id of ['R3', 'R4']) assert.equal(d.risk_checks.find((c) => c.id === id).not_applicable, true);
   const mock = async (path, p) => { const env = await mockFuyao(path, p); if (path.includes('income-statements') && p.thscode === '300059.SZ') for (const it of env.data.item) it.parent_holder_net_profit = it.operating_income * 3.5; return env; };
   const d2 = buildEvidence(await collectWith(mock));
-  assert.match(d2.evidence.find((e) => e.id === 'X2').rule, /I2.*仍纳入/);
+  assert.match(d2.evidence.find((e) => e.id === 'X2').rule, /不参与任何同行排名.*估值中位数/);
+});
+
+// ---------- 第四轮：最终复核发现的问题 ----------
+test('单季拆分：F3/F6 用单季口径，收入加速 + 利润减速时生成矛盾 C12', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const f3 = d.evidence.find((e) => e.id === 'F3'), f6 = d.evidence.find((e) => e.id === 'F6');
+  assert.equal(f3.status, 'ok'); assert.equal(f6.status, 'ok');
+  assert.match(f3.basis, /单季/); assert.match(f6.basis, /单季/);
+  if (f6.polarity === 'positive' && f3.polarity === 'negative') assert.ok(d.contradictions.some((c) => c.id === 'C12'));
+});
+
+test('校验器：营收在加速时说“营收增速放缓”判为方向错误', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const f6 = d.evidence.find((e) => e.id === 'F6');
+  f6.value = 13.6; f6.status = 'ok'; // 构造：单季营收加速
+  const r = verify({ headline: '营收与归母净利增速较上期放缓', headline_ids: ['F1', 'F2'] }, d);
+  assert.ok(r.issues.some((i) => i.type === 'direction_mismatch' && /营收/.test(i.detail)));
+  const ok = verify({ headline: '营收高增，利润增速放缓', headline_ids: ['F1', 'F2'] }, d);
+  assert.ok(!ok.issues.some((i) => i.type === 'direction_mismatch'));
+});
+
+test('必出清单：上游失败时证据不得静默消失', async () => {
+  const fail = (re) => async (path, p) => (re.test(path) ? { code: 5003, message: 'down', request_id: 'x', data: null } : mockFuyao(path, p));
+  const base = buildEvidence(await collectWith(mockFuyao)).evidence.map((e) => e.id);
+  for (const re of [/valuations/, /balance-sheets/, /a-share-index\/prices/]) {
+    const ids = buildEvidence(await collectWith(fail(re))).evidence.map((e) => e.id);
+    for (const id of base.filter((x) => /^[FQVMIED]\d$/.test(x))) assert.ok(ids.includes(id), `${re} 失败时 ${id} 不应消失`);
+  }
+});
+
+test('估值相对判定：有效同行不足 3 家或分化过大时不判正负', async () => {
+  const mock = async (path, p) => {
+    const env = await mockFuyao(path, p);
+    if (path.includes('valuations')) for (const it of env.data.item) if (it.thscode !== CODE) it.pcf_ttm = { '300059.SZ': 10, '300803.SZ': 900, '601519.SH': 20, '688318.SH': 15 }[it.thscode];
+    return env;
+  };
+  const d = buildEvidence(await collectWith(mock));
+  const v4 = d.evidence.find((e) => e.id === 'V4');
+  assert.equal(v4.polarity, 'neutral');
+  assert.match(v4.detail, /分化过大|不足 3 家/);
+});
+
+test('Q6 重要性门槛：应收占营收很小时不判正负', async () => {
+  const d = buildEvidence(await collectWith(mockFuyao));
+  const q6 = d.evidence.find((e) => e.id === 'Q6');
+  if (/不具参考意义/.test(q6.detail)) assert.equal(q6.polarity, 'neutral');
 });
